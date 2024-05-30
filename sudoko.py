@@ -143,19 +143,20 @@ def find_box_values(grid: Grid, row: int, col: int) -> set[int]:
     }
     return elements
 
-
-def find_singleton_box_set_values(grid: SetGrid, irow: int, icol: int) -> set[int]:
+def find_box_values(grid: SetGrid, irow: int, icol: int) -> Generator[set[int], None, None]:
     """Find the values in the 3x3 containing box"""
     box_row = irow // 3 * 3
     box_col = icol // 3 * 3
-    values = set()
     for row in range(box_row, box_row + 3):
         for col in range(box_col, box_col + 3):
             if row != irow and col != icol:
-                if len(grid[row][col]) == 1:
-                    values |= grid[row][col]
-    return values
+                    yield grid[row][col]
 
+def find_singleton_box_set_values(grid: SetGrid, irow: int, icol: int) -> Generator[set[int], None, None]:
+    """Find the values in the 3x3 containing box"""
+    for values in find_box_values(grid, irow, icol):
+        if len(values) == 1:
+            yield next(iter(values))
 
 def calculate_initial_options(grid: Grid, row: int, col: int) -> set[int]:
     if grid[row][col] != 0:
@@ -195,15 +196,22 @@ def calculate_options(grid: SetGrid, row: int, col: int) -> set[int]:
 
     def forced_row_value():
         """Find the value that is forced by the other values in the row"""
-        other_values = set()
-        for c, value_set in enumerate(grid[row]):
-            if len(value_set) == 1 and c != col:
-                other_values |= value_set
-        
+        other_values = set().union(*other_row_values())
+        return grid[row][col] - other_values
+    
+    def forced_col_value():
+        """Find the value that is forced by the other values in the column"""
+        other_values = set().union(*other_col_values())
+        return grid[row][col] - other_values
+    
+    def forced_box_value():
+        """Find the value that is forced by the other values in the box"""
+        other_values = find_box_values(grid, row, col)
+        return grid[row][col] - other_values
 
     singleton_row_values = set(taken_row_values())
     singleton_col_values = set(taken_col_values())
-    box_values = find_singleton_box_set_values(grid, row, col)
+    box_values = set(find_singleton_box_set_values(grid, row, col))
     # print(f"{grid[row][col]},srv={singleton_row_values}, src={singleton_col_values}, bv={box_values}")
     options = grid[row][col] - singleton_row_values - singleton_col_values - box_values
     return options
