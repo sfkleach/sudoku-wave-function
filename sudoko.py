@@ -192,26 +192,27 @@ def taken_col_values(grid: SetGrid, row: int, col: int):
         if len(value_set) == 1:
             yield next(iter(value_set))
 
-def calculate_options(grid: SetGrid, row: int, col: int) -> set[int]:
+def forced_row_value(grid: SetGrid, row: int, col: int):
+    """Find the value that is forced by the other values in the row"""
+    other_values = set().union(*other_row_values(grid, row, col))
+    return grid[row][col] - other_values
 
-    def forced_row_value():
-        """Find the value that is forced by the other values in the row"""
-        other_values = set().union(*other_row_values(grid, row, col))
-        return grid[row][col] - other_values
-    
-    def forced_col_value():
-        """Find the value that is forced by the other values in the column"""
-        other_values = set().union(*other_col_values(grid, row, col))
-        return grid[row][col] - other_values
-    
-    def forced_box_value():
-        """Find the value that is forced by the other values in the box"""
-        other_values = set().union(*find_box_values(grid, row, col))
-        return grid[row][col] - other_values
+def forced_col_value(grid: SetGrid, row: int, col: int):
+    """Find the value that is forced by the other values in the column"""
+    other_values = set().union(*other_col_values(grid, row, col))
+    return grid[row][col] - other_values
+
+def forced_box_value(grid: SetGrid, row: int, col: int):
+    """Find the value that is forced by the other values in the box"""
+    other_values = set().union(*find_box_values(grid, row, col))
+    return grid[row][col] - other_values
+
+
+def calculate_options(grid: SetGrid, row: int, col: int) -> set[int]:
 
     forced = None
     
-    frv = forced_row_value()
+    frv = forced_row_value(grid, row, col)
     if len(frv) == 1:
         if forced is None:
             forced = frv
@@ -220,7 +221,7 @@ def calculate_options(grid: SetGrid, row: int, col: int) -> set[int]:
     elif len(frv) > 1:
         forced = set()
     
-    fcv = forced_col_value()
+    fcv = forced_col_value(grid, row, col)
     if len(fcv) == 1:
         if forced is None:
             forced = fcv
@@ -229,7 +230,7 @@ def calculate_options(grid: SetGrid, row: int, col: int) -> set[int]:
     elif len(fcv) > 1:
         forced = set()
     
-    fbv = forced_box_value()
+    fbv = forced_box_value(grid, row, col)
     if len(fbv) == 1:
         if forced is None:
             forced = fbv
