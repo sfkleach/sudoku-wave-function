@@ -149,7 +149,7 @@ def find_box_values(grid: SetGrid, irow: int, icol: int) -> Generator[set[int], 
     box_col = icol // 3 * 3
     for row in range(box_row, box_row + 3):
         for col in range(box_col, box_col + 3):
-            if row != irow and col != icol:
+            if row != irow or col != icol:
                     yield grid[row][col]
 
 def find_singleton_box_set_values(grid: SetGrid, irow: int, icol: int) -> Generator[set[int], None, None]:
@@ -158,62 +158,101 @@ def find_singleton_box_set_values(grid: SetGrid, irow: int, icol: int) -> Genera
         if len(values) == 1:
             yield next(iter(values))
 
-def calculate_initial_options(grid: Grid, row: int, col: int) -> set[int]:
-    if grid[row][col] != 0:
-        return {grid[row][col]}
-    row_values = set(grid[row]) - {grid[row][col]}
-    col_values = {grid[r][col] for r in range(9)} - {grid[row][col]}
-    box_values = find_box_values(grid, row, col) - {grid[row][col]}
-    options = set(range(1, 10)) - row_values - col_values - box_values
-    return options
+def other_row_coords(row: int, col: int) -> Generator[tuple[int, int], None, None]:
+    """Find the coordinates in the row, excluding the current cell"""
+    for c in range(9):
+        if c != col:
+            yield row, c
 
+def other_col_coords(row: int, col: int) -> Generator[tuple[int, int], None, None]:
+    """Find the coordinates in the row, excluding the current cell"""
+    for r in range(9):
+        if r != row:
+            yield r, col
+
+def other_row_values(grid: SetGrid, row: int, col: int) -> Generator[set[int], None, None]:
+    """Find the values in the row that are already taken, excluding the current cell"""
+    for r, c in other_row_coords(row, col):
+        yield grid[r][c]
+
+def other_col_values(grid: SetGrid, row: int, col: int) -> Generator[set[int], None, None]:
+    """Find the values in the column that are already taken, excluding the current cell"""
+    for r, c in other_col_coords(row, col):
+        yield grid[r][c]
+
+def taken_row_values(grid: SetGrid, row: int, col: int):
+    """Find the values in the row that are already taken, excluding the current cell"""
+    for value_set in other_row_values(grid, row, col):
+        if len(value_set) == 1:
+            yield next(iter(value_set))
+
+def taken_col_values(grid: SetGrid, row: int, col: int):
+    """Find the values in the column that are already taken, excluding the current cell"""
+    for value_set in other_col_values(grid, row, col):
+        if len(value_set) == 1:
+            yield next(iter(value_set))
 
 def calculate_options(grid: SetGrid, row: int, col: int) -> set[int]:
 
-    def other_row_values() -> Generator[set[int], None, None]:
-        """Find the values in the row that are already taken, excluding the current cell"""
-        for c, value_set in enumerate(grid[row]):
-            if c != col:
-                yield value_set
-
-    def other_col_values() -> Generator[set[int], None, None]:
-        """Find the values in the column that are already taken, excluding the current cell"""
-        for r in range(9):
-            if r != row:
-                yield grid[r][col]
-
-    def taken_row_values():
-        """Find the values in the row that are already taken, excluding the current cell"""
-        for value_set in other_row_values():
-            if len(value_set) == 1:
-                yield next(iter(value_set))
-
-    def taken_col_values():
-        """Find the values in the column that are already taken, excluding the current cell"""
-        for value_set in other_col_values():
-            if len(value_set) == 1:
-                yield next(iter(value_set))
-
     def forced_row_value():
         """Find the value that is forced by the other values in the row"""
-        other_values = set().union(*other_row_values())
+        other_values = set().union(*other_row_values(grid, row, col))
         return grid[row][col] - other_values
     
     def forced_col_value():
         """Find the value that is forced by the other values in the column"""
-        other_values = set().union(*other_col_values())
+        other_values = set().union(*other_col_values(grid, row, col))
         return grid[row][col] - other_values
     
     def forced_box_value():
         """Find the value that is forced by the other values in the box"""
-        other_values = find_box_values(grid, row, col)
+        other_values = set().union(*find_box_values(grid, row, col))
         return grid[row][col] - other_values
 
-    singleton_row_values = set(taken_row_values())
-    singleton_col_values = set(taken_col_values())
+    forced = None
+    
+    frv = forced_row_value()
+    if len(frv) == 1:
+        if forced is None:
+            forced = frv
+        elif forced != frv:
+            forced = set()
+    elif len(frv) > 1:
+        forced = set()
+    
+    fcv = forced_col_value()
+    if len(fcv) == 1:
+        if forced is None:
+            forced = fcv
+        elif forced != fcv:
+            forced = set()
+    elif len(fcv) > 1:
+        forced = set()
+    
+    fbv = forced_box_value()
+    if len(fbv) == 1:
+        if forced is None:
+            forced = fbv
+        elif forced != fbv:
+            forced = set()
+    elif len(fbv) > 1:
+        forced = set()
+
+    if forced is not None:
+        return forced
+
+    singleton_row_values = set(taken_row_values(grid, row, col))
+    singleton_col_values = set(taken_col_values(grid, row, col))
     box_values = set(find_singleton_box_set_values(grid, row, col))
-    # print(f"{grid[row][col]},srv={singleton_row_values}, src={singleton_col_values}, bv={box_values}")
     options = grid[row][col] - singleton_row_values - singleton_col_values - box_values
+    # print(f"{grid[row][col]}, srv={singleton_row_values}, src={singleton_col_values}, bv={box_values}")
+    # print(f"{options=}")
+    # if forced is not None and not(forced) and options:
+    #     print(f"{row=}, {col=}, value={grid[row][col]}")
+    #     print(f"{options=}, {forced=}")
+    #     print(f"{frv=}, {list(other_row_values())}")
+    #     print(f"{fcv=}, {list(other_col_values())}")
+    #     print(f"{fbv=}")
     return options
 
 def propagate_constraints(grid: SetGrid) -> SetGrid:
