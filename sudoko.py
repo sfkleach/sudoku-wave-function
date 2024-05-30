@@ -1,7 +1,6 @@
 from typing import TypeAlias, Generator
 
-Grid: TypeAlias = list[list[int]]
-SetGrid: TypeAlias = list[list[set[int]]]
+#-- Examples -------------------------------------------------------------------
 
 # Examples from https://sudoku.com/
 EXAMPLE = """
@@ -74,7 +73,6 @@ ________8
 _7___5___
 """
 
-
 EXTREME_EXPECTED="""
 +-----+-----+-----+-----+-----+-----+-----+-----+-----+
 |  3  |  5  |  7  |  6  |  1  |  8  |  9  |  2  |  4  |
@@ -97,15 +95,21 @@ EXTREME_EXPECTED="""
 +-----+-----+-----+-----+-----+-----+-----+-----+-----+
 """
 
+#-- Code -----------------------------------------------------------------------
+
+Grid: TypeAlias = list[list[int]]
+SudokuGrid: TypeAlias = list[list[set[int]]]
+
 def convert_to_grid(puzzle: str) -> list[list[int]]:
-    # print('{puzzle=}')
+    """Convert a puzzle string to a 2D grid of integers."""
     return [
         [int(c) if c != '_' else 0 for c in line]
         for line in puzzle.splitlines()
         if line
     ]
 
-def new_sudoku(grid: Grid) -> SetGrid:
+def new_sudoku(grid: Grid) -> SudokuGrid:
+    """Convert a grid of integers to the a grid of possible-values."""
     return [
         [
             {n} if n else set(range(1,10))
@@ -114,9 +118,11 @@ def new_sudoku(grid: Grid) -> SetGrid:
         for row in grid
     ]
 
+
 class Sudoku:
 
-    def __init__(self, *, puzzle: str | None = None, grid: SetGrid | None = None):
+    def __init__(self, *, puzzle: str | None = None, grid: SudokuGrid | None = None):
+        """Create a Sudoku object from a puzzle string or a grid of sets."""
         if puzzle is not None:
             # print(f'{puzzle=}')
             self._grid = new_sudoku(convert_to_grid(puzzle))
@@ -178,6 +184,7 @@ class Sudoku:
         return True
 
     def simplify(self) -> Generator['Sudoku', None, None]:
+        """Returns either 0 or 1 results"""
         sudoku = self
         while sudoku.is_valid():
             g = sudoku.propagate_constraints()
@@ -196,10 +203,13 @@ class Sudoku:
                 for choice in L:
                     new_guesses = [ f"Guessing {row=}, {col=}, {choice=}", *guesses ]       
                     print(f"Guesses: {new_guesses}")
+                    # IMPORTANT: This mutates the Sudoku object, so this is only 
+                    # safe because objects are generated fresh by simplify().
                     sg.set(row, col, choice)
                     yield from sg.solve(new_guesses)
             else:
                 yield sg
+
 
 def other_row_coords(row: int, col: int) -> Generator[tuple[int, int], None, None]:
     """Find the coordinates in the row, excluding the current cell"""
@@ -221,6 +231,7 @@ def other_box_coords(row: int, col: int) -> Generator[tuple[int, int], None, Non
         for c in range(box_col, box_col + 3):
             if r != row or c != col:
                 yield r, c
+
 
 class Focus:
 
@@ -318,16 +329,7 @@ class Focus:
         singleton_col_values = set(self.taken_col_values())
         box_values = set(self.find_singleton_box_set_values())
         options = self.value() - singleton_row_values - singleton_col_values - box_values
-        # print(f"{grid[row][col]}, srv={singleton_row_values}, src={singleton_col_values}, bv={box_values}")
-        # print(f"{options=}")
-        # if forced is not None and not(forced) and options:
-        #     print(f"{row=}, {col=}, value={grid[row][col]}")
-        #     print(f"{options=}, {forced=}")
-        #     print(f"{frv=}, {list(other_row_values())}")
-        #     print(f"{fcv=}, {list(other_col_values())}")
-        #     print(f"{fbv=}")
         return options
-
 
 
 """
@@ -339,8 +341,6 @@ THE PLAN:
 5. Calculate new setgrid 
 6. go again
 """
-
-
 
 def main(puzzle: str):
     S = Sudoku(puzzle=puzzle)
@@ -355,4 +355,4 @@ def main(puzzle: str):
         break
 
 if __name__ == "__main__":
-    main(EXPERT)
+    main(EXTREME)
