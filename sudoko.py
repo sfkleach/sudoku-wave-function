@@ -185,7 +185,7 @@ def calculate_options(grid: SetGrid, row: int, col: int) -> set[int]:
         """Find the values in the row that are already taken, excluding the current cell"""
         for value_set in other_row_values():
             if len(value_set) == 1:
-                yield next(iter(value_set)))
+                yield next(iter(value_set))
 
     def taken_col_values():
         """Find the values in the column that are already taken, excluding the current cell"""
