@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "sudoku-wave-function"
+version = "0.1.0"
+description = "Quick hack from the Python Dojo"
+authors = ["Stephen Leach <sfkleach@gmail.com>"]
+license = "GPL 3.0"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.2.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
