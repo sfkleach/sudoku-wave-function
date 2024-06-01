@@ -1,102 +1,5 @@
 from typing import TypeAlias, Generator
 
-#-- Examples -------------------------------------------------------------------
-
-# Examples from https://sudoku.com/
-EXAMPLE = """
-___83_6__
-1____5___
-5_3__2497
-__9__83__
-3___1_7_6
-_126_____
-9___2_87_
-___749__2
-62_3__954
-"""
-
-EXAMPLE_EXPECTED = """
-+---+---+---+---+---+---+---+---+---+
-| 2 │ 9 │ 4 | 8 │ 3 │ 7 | 6 │ 1 │ 5 |
-+---+---+---+---+---+---+---+---+---+
-| 1 │ 7 │ 6 | 4 │ 9 │ 5 | 2 │ 3 │ 8 |
-+---+---+---+---+---+---+---+---+---+
-| 5 │ 8 │ 3 | 1 │ 6 │ 2 | 4 │ 9 │ 7 |
-+---+---+---+---+---+---+---+---+---+
-| 7 │ 6 │ 9 | 2 │ 5 │ 8 | 3 │ 4 │ 1 |
-+---+---+---+---+---+---+---+---+---+
-| 3 │ 5 │ 8 | 9 │ 1 │ 4 | 7 │ 2 │ 6 |
-+---+---+---+---+---+---+---+---+---+
-| 4 │ 1 │ 2 | 6 │ 7 │ 3 | 5 │ 8 │ 9 |
-+---+---+---+---+---+---+---+---+---+
-| 9 │ 4 │ 1 | 5 │ 2 │ 6 | 8 │ 7 │ 3 |
-+---+---+---+---+---+---+---+---+---+
-| 8 │ 3 │ 5 | 7 │ 4 │ 9 | 1 │ 6 │ 2 |
-+---+---+---+---+---+---+---+---+---+
-| 6 │ 2 │ 7 | 3 │ 8 │ 1 | 9 │ 5 │ 4 |
-+---+---+---+---+---+---+---+---+---+
-"""
-
-HARD = """
-_____2___
-___6_3___
-_9_7____2
-__2_14__8
-37_82___1
-185_6____
-53____9__
-__9___257
-82_94____
-"""
-
-EXPERT = """
-46_98_3__
-__97_6_2_
-_____19__
-5_61_4___
-_42___6__
-____6547_
-9________
-657329___
-2______93
-"""
-
-EXTREME = """
-_5_____2_
-__64__13_
-4___9____
-___1____2
-__8_____9
-_3__7_81_
-__39__64_
-________8
-_7___5___
-"""
-
-EXTREME_EXPECTED="""
-+-----+-----+-----+-----+-----+-----+-----+-----+-----+
-|  3  |  5  |  7  |  6  |  1  |  8  |  9  |  2  |  4  |
-+-----+-----+-----+-----+-----+-----+-----+-----+-----+
-|  8  |  9  |  6  |  4  |  5  |  2  |  1  |  3  |  7  |
-+-----+-----+-----+-----+-----+-----+-----+-----+-----+
-|  4  |  2  |  1  |  7  |  9  |  3  |  5  |  8  |  6  |
-+-----+-----+-----+-----+-----+-----+-----+-----+-----+
-|  7  |  4  |  5  |  1  |  8  |  9  |  3  |  6  |  2  |
-+-----+-----+-----+-----+-----+-----+-----+-----+-----+
-|  2  |  1  |  8  |  5  |  3  |  6  |  4  |  7  |  9  |
-+-----+-----+-----+-----+-----+-----+-----+-----+-----+
-|  6  |  3  |  9  |  2  |  7  |  4  |  8  |  1  |  5  |
-+-----+-----+-----+-----+-----+-----+-----+-----+-----+
-|  5  |  8  |  3  |  9  |  2  |  7  |  6  |  4  |  1  |
-+-----+-----+-----+-----+-----+-----+-----+-----+-----+
-|  9  |  6  |  2  |  3  |  4  |  1  |  7  |  5  |  8  |
-+-----+-----+-----+-----+-----+-----+-----+-----+-----+
-|  1  |  7  |  4  |  8  |  6  |  5  |  2  |  9  |  3  |
-+-----+-----+-----+-----+-----+-----+-----+-----+-----+
-"""
-
-#-- Code -----------------------------------------------------------------------
-
 Grid: TypeAlias = list[list[int]]
 SudokuGrid: TypeAlias = list[list[set[int]]]
 
@@ -121,8 +24,9 @@ def new_sudoku(grid: Grid) -> SudokuGrid:
 
 class Sudoku:
 
-    def __init__(self, *, puzzle: str | None = None, grid: SudokuGrid | None = None):
+    def __init__(self, *, puzzle: str | None = None, grid: SudokuGrid | None = None, print=False):
         """Create a Sudoku object from a puzzle string or a grid of sets."""
+        self._print = print
         if puzzle is not None:
             # print(f'{puzzle=}')
             self._grid = new_sudoku(convert_to_grid(puzzle))
@@ -174,7 +78,7 @@ class Sudoku:
             return (i, j)
 
     def propagate_constraints(self) -> 'Sudoku':
-        return Sudoku(grid=[[Focus(self, row, col).calculate_options() for col in range(9)] for row in range(9)])
+        return Sudoku(grid=[[Focus(self, row, col).calculate_options() for col in range(9)] for row in range(9)], print=self._print)
     
     def is_valid(self) -> bool:
         for row in self._grid:
@@ -193,16 +97,25 @@ class Sudoku:
                 break
             sudoku = g
 
+    def as_puzzle_string(self) -> str:
+        return "\n".join(
+            "".join(str(next(iter(cell))) if len(cell) == 1 else "_"
+            for cell in row)
+            for row in self._grid
+        )
+
     def solve(self, guesses) -> Generator['Sudoku', None, None]:
-        self.pretty()
-        print()
+        if self._print:
+            self.pretty()
+            print()
         for sg in self.simplify():
             if minimum := sg.find_minimum_set():
                 row, col = minimum
                 L = list(sg.get(row, col))
                 for choice in L:
                     new_guesses = [ f"Guessing {row=}, {col=}, {choice=}", *guesses ]       
-                    print(f"Guesses: {new_guesses}")
+                    if self._print:
+                        print(f"Guesses: {new_guesses}")
                     # IMPORTANT: This mutates the Sudoku object, so this is only 
                     # safe because objects are generated fresh by simplify().
                     sg.set(row, col, choice)
@@ -331,19 +244,17 @@ class Focus:
         options = self.value() - singleton_row_values - singleton_col_values - box_values
         return options
 
-
-"""
-THE PLAN:
-1. First convert the sudoku to a set sudoku of all possible options
-2. Collapse all singletons
-3. Find the smallest non singleton-set
-4. Pick one of its values and just set it (w backtracking)
-5. Calculate new setgrid 
-6. go again
-"""
+def solve(puzzle: str) -> str:
+    """Solve a Sudoku puzzle and return the solution as a puzzle string."""
+    S = Sudoku(puzzle=puzzle)
+    simplified = list(S.simplify())
+    if simplified:
+        for n, G in enumerate(simplified[0].solve([])):
+            return G.as_puzzle_string()
 
 def main(puzzle: str):
-    S = Sudoku(puzzle=puzzle)
+    """Solve a Sudoku puzzle and print the progress and solution."""
+    S = Sudoku(puzzle=puzzle, print=True)
     simplified = list(S.simplify())
     if not simplified:
         print("No solution")
@@ -354,5 +265,3 @@ def main(puzzle: str):
         G.pretty()
         break
 
-if __name__ == "__main__":
-    main(EXTREME)
