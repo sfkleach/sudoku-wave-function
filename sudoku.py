@@ -1,46 +1,74 @@
 from typing import TypeAlias, Generator
+import math
 
-Grid: TypeAlias = list[list[int]]
-SudokuGrid: TypeAlias = list[list[set[int]]]
+TinyIntSet: TypeAlias = set[int]
+SudokuGrid: TypeAlias = list[list[TinyIntSet]]
 
-def convert_to_grid(puzzle: str) -> list[list[int]]:
-    """Convert a puzzle string to a 2D grid of integers."""
-    return [
-        [int(c) if c != '_' else 0 for c in line]
-        for line in puzzle.splitlines()
-        if line
-    ]
+class Configuration:
+    """A configuration for a Sudoku grid, with methods that only depend on the size of the grid."""
 
-def new_sudoku(grid: Grid) -> SudokuGrid:
-    """Convert a grid of integers to the a grid of possible-values."""
-    return [
-        [
-            {n} if n else set(range(1,10))
-            for n in row
-        ]
-        for row in grid
-    ]
+    def __init__(self, *, size, do_print=False):
+        self._print = do_print
+        self._size = size
+        self._cell_count = size * size
+        print( 'SIZE', self._size, 'CELL_COUNT', self._cell_count)
+
+    def cell_count(self) -> int:
+        return self._cell_count
+    
+    def cell_range(self) -> range:
+        return range(self._cell_count)
+    
+    def other_row_coords(self, row: int, col: int) -> Generator[tuple[int, int], None, None]:
+        """Find the coordinates in the row, excluding the current cell"""
+        for c in self.cell_range():
+            if c != col:
+                yield row, c
+
+    def other_col_coords(self, row: int, col: int) -> Generator[tuple[int, int], None, None]:
+        """Find the coordinates in the row, excluding the current cell"""
+        for r in self.cell_range():
+            if r != row:
+                yield r, col
+
+    def other_box_coords(self, row: int, col: int) -> Generator[tuple[int, int], None, None]:
+        """Find the coordinates in the 3x3 containing box, excluding the current cell"""
+        box_row = row // self._size * self._size
+        box_col = col // self._size * self._size
+        for r in range(box_row, box_row + self._size):
+            for c in range(box_col, box_col + self._size):
+                if r != row or c != col:
+                    yield r, c
+
+
+def as_1_char(x):
+    """Convert an integer to a single character string, from 0 to 35"""
+    alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    return alphabet[x]
 
 
 class Sudoku:
+    """A Sudoku grid, with methods to simplify and solve it."""
 
-    def __init__(self, *, puzzle: str | None = None, grid: SudokuGrid | None = None, print=False):
-        """Create a Sudoku object from a puzzle string or a grid of sets."""
-        self._print = print
-        if puzzle is not None:
-            # print(f'{puzzle=}')
-            self._grid = new_sudoku(convert_to_grid(puzzle))
-        elif grid is not None:
-            self._grid = grid
+    def __init__(self, *, grid: SudokuGrid, configuration=None, do_print:bool = False):
+        self._configuration = configuration or Configuration(do_print=do_print, size=math.isqrt(len(grid)))
+        self._grid = grid
+
+    def print(self, *args, **kwargs):
+        self._configuration._print(*args, **kwargs)
+
+    def is_printing(self) -> bool:
+        return self._configuration._print
 
     def get(self, row: int, col: int) -> set[int]:
         return self._grid[row][col]
     
-    def set(self, row: int, col: int, value: int):
+    def set_choice(self, row: int, col: int, value: int):
         """Must be used with care, as it surgically updates the Sudoku grid."""
         self._grid[row][col] = {value}
 
     def pretty(self):
+        """Print the Sudoku grid in a human-friendly format."""
 
         def cellstr(x):
             if len(x) > 5:
@@ -50,21 +78,26 @@ class Sudoku:
                 n1 = 5 - len(x) - n2
                 return " " * n1 + x + " " * n2
 
-        print("+-----+-----+-----+-----+-----+-----+-----+-----+-----+")
-        sep = None
+        N = self._configuration.cell_count()
+        print(N*"+-----", end='')
+        print("+")
+        sep = False
         for row in self._grid:
-            if sep is not None:
-                print(sep)
+            if sep:
+                print(N*"+-----", end='')
+                print("+")
             print("|", end="")
             for cell in row:
-                txt = "".join(map(str, cell))
+                txt = "".join(map(as_1_char, cell))
                 print(f"{cellstr(txt)}", end="|")
             print()
-            sep = "+-----+-----+-----+-----+-----+-----+-----+-----+-----+"
-        print("+-----+-----+-----+-----+-----+-----+-----+-----+-----+")
+            sep = True
+        print(N*"+-----", end='')
+        print("+")
 
     def find_minimum_set(self) -> tuple[int, int] | None:
-        sofar = 9
+        """Find a cell with the smallest set of possible values."""
+        sofar = self._configuration.cell_count()
         (i, j) = (-1, -1)
         for r, row in enumerate(self._grid):
             for c, col in enumerate(row):
@@ -78,9 +111,15 @@ class Sudoku:
             return (i, j)
 
     def propagate_constraints(self) -> 'Sudoku':
-        return Sudoku(grid=[[Focus(self, row, col).calculate_options() for col in range(9)] for row in range(9)], print=self._print)
+        """Repeatedly apply the constraints until no more changes are made."""
+        R = self._configuration.cell_range()
+        return Sudoku(
+            grid=[[Focus(self, row, col).calculate_options() for col in R] for row in R], 
+            configuration=self._configuration
+        )
     
     def is_valid(self) -> bool:
+        """Check if the Sudoku grid is valid i.e. no cells have an empty set."""
         for row in self._grid:
             for cell in row:
                 if not cell:
@@ -98,14 +137,15 @@ class Sudoku:
             sudoku = g
 
     def as_puzzle_string(self) -> str:
+        """Return the Sudoku grid as a puzzle string."""
         return "\n".join(
-            "".join(str(next(iter(cell))) if len(cell) == 1 else "_"
+            "".join(as_1_char(next(iter(cell))) if len(cell) == 1 else "_"
             for cell in row)
             for row in self._grid
         )
 
     def solve(self, guesses) -> Generator['Sudoku', None, None]:
-        if self._print:
+        if self.is_printing():
             self.pretty()
             print()
         for sg in self.simplify():
@@ -114,147 +154,121 @@ class Sudoku:
                 L = list(sg.get(row, col))
                 for choice in L:
                     new_guesses = [ f"Guessing {row=}, {col=}, {choice=}", *guesses ]       
-                    if self._print:
+                    if self.is_printing():
                         print(f"Guesses: {new_guesses}")
                     # IMPORTANT: This mutates the Sudoku object, so this is only 
-                    # safe because objects are generated fresh by simplify().
-                    sg.set(row, col, choice)
+                    # safe because SudokuGrids are generated completely fresh by 
+                    # propagate_constraints() and hence simplify().
+                    sg.set_choice(row, col, choice)
                     yield from sg.solve(new_guesses)
-            else:
+            elif sg.is_valid():
                 yield sg
 
 
-def other_row_coords(row: int, col: int) -> Generator[tuple[int, int], None, None]:
-    """Find the coordinates in the row, excluding the current cell"""
-    for c in range(9):
-        if c != col:
-            yield row, c
+class Forcing:
+    """A class to track forced values in a Sudoku grid."""
+            
+    def __init__(self):
+        self._forced: set[int] | None = None
 
-def other_col_coords(row: int, col: int) -> Generator[tuple[int, int], None, None]:
-    """Find the coordinates in the row, excluding the current cell"""
-    for r in range(9):
-        if r != row:
-            yield r, col
+    def restrict_by_value_group(self, current, values):
+        forced_choices = current - set().union(*values)
+        if len(forced_choices) == 1:
+            if self._forced is None:
+                self._forced = forced_choices
+            elif self._forced != forced_choices:
+                self._forced = set()                
+        elif len(forced_choices) > 1:
+            self._forced = set()
 
-def other_box_coords(row: int, col: int) -> Generator[tuple[int, int], None, None]:
-    """Find the coordinates in the 3x3 containing box, excluding the current cell"""
-    box_row = row // 3 * 3
-    box_col = col // 3 * 3
-    for r in range(box_row, box_row + 3):
-        for c in range(box_col, box_col + 3):
-            if r != row or c != col:
-                yield r, c
+    def has_forced_value(self):
+        return self._forced is not None
 
+    def forced_value(self):
+        return self._forced
 
 class Focus:
+    """A cell in a Sudoku grid, with methods to calculate the possible values."""
 
     def __init__(self, sudoku: Sudoku, row: int, col: int):
         self._sudoku = sudoku
         self._row = row
         self._col = col
 
-    def find_box_values(self) -> Generator[set[int], None, None]:
-        """Find the values in the 3x3 containing box"""
-        for r, c in other_box_coords(self._row, self._col):
-            yield self._sudoku.get(r, c)
-
-    def find_singleton_box_set_values(self) -> Generator[int, None, None]:
-        """Find the values in the 3x3 containing box"""
-        for values in self.find_box_values():
-            if len(values) == 1:
-                yield next(iter(values))
-
-    def other_row_values(self) -> Generator[set[int], None, None]:
-        """Find the values in the row that are already taken, excluding the current cell"""
-        for r, c in other_row_coords(self._row, self._col):
-            yield self._sudoku.get(r, c)
-
-    def other_col_values(self) -> Generator[set[int], None, None]:
-        """Find the values in the column that are already taken, excluding the current cell"""
-        for r, c in other_col_coords(self._row, self._col):
-            yield self._sudoku.get(r, c)
-
-    def taken_row_values(self) -> Generator[int, None, None]:
-        """Find the values in the row that are already taken, excluding the current cell"""
-        for value_set in self.other_row_values():
-            if len(value_set) == 1:
-                yield next(iter(value_set))
-
-    def taken_col_values(self):
-        """Find the values in the column that are already taken, excluding the current cell"""
-        for value_set in self.other_col_values():
-            if len(value_set) == 1:
-                yield next(iter(value_set))
-
     def value(self):
         return self._sudoku.get(self._row, self._col)
+    
+    def other_row_coords(self):
+        return self._sudoku._configuration.other_row_coords(self._row, self._col)
+    
+    def other_col_coords(self):
+        return self._sudoku._configuration.other_col_coords(self._row, self._col)
+    
+    def other_box_coords(self):
+        return self._sudoku._configuration.other_box_coords(self._row, self._col)
+    
+    def as_values(self, coords):
+        for r, c in coords:
+            yield self._sudoku.get(r, c)
 
-    def forced_row_value(self):
-        """Find the value that is forced by the other values in the row"""
-        other_values = set().union(*self.other_row_values())
-        return self.value() - other_values
-
-    def forced_col_value(self):
-        """Find the value that is forced by the other values in the column"""
-        other_values = set().union(*self.other_col_values())
-        return self.value() - other_values
-
-    def forced_box_value(self):
-        """Find the value that is forced by the other values in the box"""
-        other_values = set().union(*self.find_box_values())
-        return self.value() - other_values
+    def value_groups(self):
+        yield self.as_values( self.other_row_coords() )
+        yield self.as_values( self.other_col_coords() )
+        yield self.as_values( self.other_box_coords() )
 
     def calculate_options(self) -> set[int]:
-
-        forced = None
+        """Calculate the possible values for this cell given the 
+        values in the row, column and box.
+        """
+         
+        current = self.value()
         
-        frv = self.forced_row_value()
-        if len(frv) == 1:
-            if forced is None:
-                forced = frv
-            elif forced != frv:
-                forced = set()
-        elif len(frv) > 1:
-            forced = set()
+        forcing = Forcing()
+        for values in self.value_groups():
+            forcing.restrict_by_value_group(current, values)
         
-        fcv = self.forced_col_value()
-        if len(fcv) == 1:
-            if forced is None:
-                forced = fcv
-            elif forced != fcv:
-                forced = set()
-        elif len(fcv) > 1:
-            forced = set()
+        if forcing.has_forced_value():
+            current = current & forcing.forced_value()
+
+        if not current:
+            return current
         
-        fbv = self.forced_box_value()
-        if len(fbv) == 1:
-            if forced is None:
-                forced = fbv
-            elif forced != fbv:
-                forced = set()
-        elif len(fbv) > 1:
-            forced = set()
+        for values in self.value_groups():
+            if not current:
+                return current
+            current = current - { next(iter(v)) for v in values if len(v) == 1 }
+        
+        return current
 
-        if forced is not None:
-            return forced
 
-        singleton_row_values = set(self.taken_row_values())
-        singleton_col_values = set(self.taken_col_values())
-        box_values = set(self.find_singleton_box_set_values())
-        options = self.value() - singleton_row_values - singleton_col_values - box_values
-        return options
+class Puzzle:
+    """A Sudoku puzzle. The grid is represented as a list of lists of sets."""
+
+    def __init__(self, puzzle: str):
+        self._grid: SudokuGrid = [
+            [ {int(c)} if c != '_' else set(range(1,len(line)+1)) for c in line ]
+            for line in puzzle.splitlines()
+            if line
+        ]  
+
+    def new_sudoku(self, *, do_print=False) -> 'Sudoku':
+        return Sudoku(grid=self._grid, do_print=do_print)
+
 
 def solve(puzzle: str) -> str:
     """Solve a Sudoku puzzle and return the solution as a puzzle string."""
-    S = Sudoku(puzzle=puzzle)
+    P = Puzzle(puzzle=puzzle)
+    S = P.new_sudoku()
     simplified = list(S.simplify())
     if simplified:
         for n, G in enumerate(simplified[0].solve([])):
             return G.as_puzzle_string()
+    return "No solution"
 
 def main(puzzle: str):
     """Solve a Sudoku puzzle and print the progress and solution."""
-    S = Sudoku(puzzle=puzzle, print=True)
+    P = Puzzle(puzzle=puzzle)
+    S = P.new_sudoku(do_print=True)
     simplified = list(S.simplify())
     if not simplified:
         print("No solution")
@@ -263,5 +277,7 @@ def main(puzzle: str):
     for n, G in enumerate(simplified[0].solve([])):
         print(f'SOLUTION #{n+1}')
         G.pretty()
-        break
+        return
+    
+    print("No solution")
 
