@@ -1,5 +1,6 @@
 from typing import TypeAlias, Generator
 import math
+from itertools import islice
 
 TinyIntSet: TypeAlias = set[int]
 SudokuGrid: TypeAlias = list[list[TinyIntSet]]
@@ -11,13 +12,19 @@ class Configuration:
         self._print = do_print
         self._size = size
         self._cell_count = size * size
-        print( 'SIZE', self._size, 'CELL_COUNT', self._cell_count)
+
+    def new_empty_sudoku(self) -> 'Sudoku':
+        initial = self.initial_set()
+        return Sudoku(grid=[[initial for _ in range(self._cell_count)] for _ in range(self._cell_count)], configuration=self)
 
     def cell_count(self) -> int:
         return self._cell_count
     
     def cell_range(self) -> range:
         return range(self._cell_count)
+    
+    def initial_set(self) -> TinyIntSet:
+        return set(range(1, self._cell_count + 1))
     
     def other_row_coords(self, row: int, col: int) -> Generator[tuple[int, int], None, None]:
         """Find the coordinates in the row, excluding the current cell"""
@@ -97,7 +104,7 @@ class Sudoku:
 
     def find_minimum_set(self) -> tuple[int, int] | None:
         """Find a cell with the smallest set of possible values."""
-        sofar = self._configuration.cell_count()
+        sofar = self._configuration.cell_count() + 1
         (i, j) = (-1, -1)
         for r, row in enumerate(self._grid):
             for c, col in enumerate(row):
@@ -143,6 +150,14 @@ class Sudoku:
             for cell in row)
             for row in self._grid
         )
+    
+    def all_solutions(self) -> Generator['Sudoku', None, None]:
+        simplified = list(self.simplify())
+        if simplified:
+            yield from simplified[0].solve([])
+
+    def first_two_solutions(self) -> list['Sudoku']:
+        return list(islice(self.all_solutions(), 2))
 
     def solve(self, guesses) -> Generator['Sudoku', None, None]:
         if self.is_printing():
@@ -245,10 +260,11 @@ class Puzzle:
     """A Sudoku puzzle. The grid is represented as a list of lists of sets."""
 
     def __init__(self, puzzle: str):
+        lines = [ line for line in puzzle.splitlines() if line ]
+        N = len(lines)
         self._grid: SudokuGrid = [
-            [ {int(c)} if c != '_' else set(range(1,len(line)+1)) for c in line ]
-            for line in puzzle.splitlines()
-            if line
+            [ {int(c)} if c != '_' else set(range(1,N+1)) for c in line ]
+            for line in lines
         ]  
 
     def new_sudoku(self, *, do_print=False) -> 'Sudoku':
