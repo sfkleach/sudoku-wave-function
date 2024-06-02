@@ -1,16 +1,17 @@
 from typing import TypeAlias, Generator
 import math
 
-SudokuGrid: TypeAlias = list[list[set[int]]]
-
+TinyIntSet: TypeAlias = set[int]
+SudokuGrid: TypeAlias = list[list[TinyIntSet]]
 
 class Configuration:
     """A configuration for a Sudoku grid, with methods that only depend on the size of the grid."""
 
-    def __init__(self, *, do_print=False, size=3):
+    def __init__(self, *, size, do_print=False):
         self._print = do_print
         self._size = size
         self._cell_count = size * size
+        print( 'SIZE', self._size, 'CELL_COUNT', self._cell_count)
 
     def cell_count(self) -> int:
         return self._cell_count
@@ -38,6 +39,13 @@ class Configuration:
             for c in range(box_col, box_col + self._size):
                 if r != row or c != col:
                     yield r, c
+
+
+def as_1_char(x):
+    """Convert an integer to a single character string, from 0 to 35"""
+    alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    return alphabet[x]
+
 
 class Sudoku:
     """A Sudoku grid, with methods to simplify and solve it."""
@@ -70,18 +78,22 @@ class Sudoku:
                 n1 = 5 - len(x) - n2
                 return " " * n1 + x + " " * n2
 
-        print("+-----+-----+-----+-----+-----+-----+-----+-----+-----+")
-        sep = None
+        N = self._configuration.cell_count()
+        print(N*"+-----", end='')
+        print("+")
+        sep = False
         for row in self._grid:
-            if sep is not None:
-                print(sep)
+            if sep:
+                print(N*"+-----", end='')
+                print("+")
             print("|", end="")
             for cell in row:
-                txt = "".join(map(str, cell))
+                txt = "".join(map(as_1_char, cell))
                 print(f"{cellstr(txt)}", end="|")
             print()
-            sep = "+-----+-----+-----+-----+-----+-----+-----+-----+-----+"
-        print("+-----+-----+-----+-----+-----+-----+-----+-----+-----+")
+            sep = True
+        print(N*"+-----", end='')
+        print("+")
 
     def find_minimum_set(self) -> tuple[int, int] | None:
         """Find a cell with the smallest set of possible values."""
@@ -127,7 +139,7 @@ class Sudoku:
     def as_puzzle_string(self) -> str:
         """Return the Sudoku grid as a puzzle string."""
         return "\n".join(
-            "".join(str(next(iter(cell))) if len(cell) == 1 else "_"
+            "".join(as_1_char(next(iter(cell))) if len(cell) == 1 else "_"
             for cell in row)
             for row in self._grid
         )
@@ -145,7 +157,8 @@ class Sudoku:
                     if self.is_printing():
                         print(f"Guesses: {new_guesses}")
                     # IMPORTANT: This mutates the Sudoku object, so this is only 
-                    # safe because objects are generated fresh by simplify().
+                    # safe because SudokuGrids are generated completely fresh by 
+                    # propagate_constraints() and hence simplify().
                     sg.set_choice(row, col, choice)
                     yield from sg.solve(new_guesses)
             elif sg.is_valid():
@@ -233,7 +246,7 @@ class Puzzle:
 
     def __init__(self, puzzle: str):
         self._grid: SudokuGrid = [
-            [ {int(c)} if c != '_' else set(range(1,10)) for c in line ]
+            [ {int(c)} if c != '_' else set(range(1,len(line)+1)) for c in line ]
             for line in puzzle.splitlines()
             if line
         ]  
