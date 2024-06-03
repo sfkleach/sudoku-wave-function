@@ -1,0 +1,22 @@
+{
+    "name": "Ubuntu",
+    "image": "ubuntu:latest",
+    "features": {
+        "ghcr.io/devcontainers/features/sshd:1": {
+            "version": "latest"
+        },
+        "ghcr.io/guiyomh/features/just:0": {
+            "version": "latest"
+        }
+    },
+    "customizations": {
+        "vscode": {
+            "settings": { 
+                "terminal.integrated.shell.linux": "/bin/bash"
+            },
+            "extensions": [
+            ]      
+        }
+    },
+    "postCreateCommand": "apt-get update && apt-get install -y build-essential"
+}
